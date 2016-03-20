@@ -1,7 +1,6 @@
 #include "Application.h"
 #include "qt_opengl_framework.h"
 #include <map>
-#include <vector>
 #include <sstream>
 #include <algorithm>
 
@@ -390,35 +389,26 @@ void Application::Dither_FS() {
 			int oRGB  = i * imgWidth * 3 + j * 3;
 			int oRGBA = i * imgWidth * 4 + j * 4;
 			float oldPixel = rgb[oRGB + RR];
-			float newPixel = oldPixel > 128 ? WHITE : BLACK;
-			// Assign the new pixel color.
-			imgData[oRGBA + RR] = imgData[oRGBA + GG] = imgData[oRGBA + BB] = newPixel;
-			imgData[oRGBA + AA] = WHITE;
-			// Add error.
-			float propagationErr = oldPixel - newPixel;
-			// Right.
-			if (j + 1 < imgWidth) {
-				rgb[oRGB + 3 + RR] += 7.0 / 16 * propagationErr;
-				rgb[oRGB + 3 + GG] += 7.0 / 16 * propagationErr;
-				rgb[oRGB + 3 + BB] += 7.0 / 16 * propagationErr;
-			}
-			// Left bottom.
-			if (i + 1 < imgHeight && j - 1 > 0) {
-				rgb[oRGB + 3 * imgWidth - 3 + RR] += 3.0 / 16 * propagationErr;
-				rgb[oRGB + 3 * imgWidth - 3 + GG] += 3.0 / 16 * propagationErr;
-				rgb[oRGB + 3 * imgWidth - 3 + BB] += 3.0 / 16 * propagationErr;
-			}
-			// Bottom.
-			if (i + 1 < imgHeight) {
-				rgb[oRGB + 3 * imgWidth + RR] += 5.0 / 16 * propagationErr;
-				rgb[oRGB + 3 * imgWidth + GG] += 5.0 / 16 * propagationErr;
-				rgb[oRGB + 3 * imgWidth + BB] += 5.0 / 16 * propagationErr;
-			}
-			// Right bottom.
-			if (i + 1 < imgHeight && j + 1 < imgWidth) {
-				rgb[oRGB + 3 * imgWidth + 3 + RR] += 1.0 / 16 * propagationErr;
-				rgb[oRGB + 3 * imgWidth + 3 + GG] += 1.0 / 16 * propagationErr;
-				rgb[oRGB + 3 * imgWidth + 3 + BB] += 1.0 / 16 * propagationErr;
+			float newPixel = (oldPixel / 256) > 0.5 ? WHITE : BLACK;
+			// pColor is RR, GG and BB.
+			for (int pColor = 0; pColor < 3; pColor++) {
+				// Assign the new pixel color.
+				imgData[oRGBA + pColor] = newPixel;
+				imgData[oRGBA + AA] = WHITE;
+				// Add error.
+				float propagationErr = oldPixel - newPixel;
+				// Right.
+				if (j + 1 < imgWidth)
+					rgb[oRGB + 3 + pColor] += 7.0 / 16 * propagationErr;
+				// Left bottom.
+				if (i + 1 < imgHeight && j - 1 > 0)
+					rgb[oRGB + 3 * imgWidth - 3 + pColor] += 3.0 / 16 * propagationErr;
+				// Bottom.
+				if (i + 1 < imgHeight)
+					rgb[oRGB + 3 * imgWidth + pColor] += 5.0 / 16 * propagationErr;
+				// Right bottom.
+				if (i + 1 < imgHeight && j + 1 < imgWidth)
+					rgb[oRGB + 3 * imgWidth + 3 + pColor] += 1.0 / 16 * propagationErr;
 			}
 		}
 		// Toggle the flag.
@@ -445,17 +435,14 @@ float Application::getDitheringClosedRGB(float pixel, int pColor) {
 		  blue[4]  = { 0, 85, 170, 255 };
 	float newPixel;
 	if (pColor == RR)
-		return red[(int) roundf(pixel / (256.0 / (sizeof(red) / sizeof(red[0]) - 1)))];
+		return red[(int) roundf(pixel / (256.0 / 7))];
 	else if (pColor == GG)
-		return green[(int) roundf(pixel / (256.0 / (sizeof(green) / sizeof(green[0]) - 1)))];
+		return green[(int) roundf(pixel / (256.0 / 7))];
 	else if (pColor == BB)
-		return blue[(int) roundf(pixel / (256.0 / (sizeof(blue) / sizeof(blue[0]) - 1)))];
+		return blue[(int) roundf(pixel / (256.0 / 3))];
 }
 
 void Application::Dither_Color() {
-	// Based on quant uniform.
-	this->Quant_Uniform();
-	
 	unsigned char * rgb = this->To_RGB();
 
 	// If zigZagFlag is true, j will strat from the rightest.
@@ -491,6 +478,9 @@ void Application::Dither_Color() {
 		zigZagFlag = zigZagFlag ? false : true;
 	}
 
+	// Based on quant uniform.
+	this->Quant_Uniform();
+
 	delete[] rgb;
 	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
@@ -500,39 +490,42 @@ void Application::Dither_Color() {
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-//     Filtering the imgData array by the filter from the parameters
-//
-///////////////////////////////////////////////////////////////////////////////
-
-void Application::filtering(double filter[][5]) {
-	unsigned char * rgb = this->To_RGB();
-
-
-
-	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
-	renew();
-}
-
-void Application::filtering(double **filter, int n) {
-	unsigned char * rgb = this->To_RGB();
-
-
-
-	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
-	renew();
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//
 //  Perform 5x5 box filter on this image.  Return success of operation.
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-int Application::getBoxFilterAvg(unsigned char * rgb, int startRGB, float filter[][5], float weights) {
-	int maskWidth  = 5;
-	int maskHeight = 5;
+float ** Application::create2dFilter(int sx, int sy, float filterData[]) {
+	// Dynamic allocation for 2d array.
+	float ** filter;
+	filter = (float **) malloc(sx * sizeof(float *));
+	for (int i = 0; i < sx; i++)
+		filter[i] = (float *) malloc(sy * sizeof(float));
+	// Assign the values.
+	for (int i = 0; i < sy; i++)
+		for (int j = 0; j < sx; j++)
+			filter[i][j] = filterData[i * sx + j];
+	return filter;
+}
+
+float ** Application::create2dFilter(int sx, int sy, vector<float> filterData) {
+	// Dynamic allocation for 2d array.
+	float ** filter;
+	filter = (float **) malloc(sx * sizeof(float *));
+	for (int i = 0; i < sx; i++)
+		filter[i] = (float *) malloc(sy * sizeof(float));
+	// Assign the values.
+	for (int i = sy - 1; i >= 0; i--) {
+		for (int j = sx - 1; j >= 0; j--) {
+			filter[i][j] = filterData.back();
+			filterData.pop_back();
+		}
+	}
+	return filter;
+}
+
+int Application::getBoxFilterAvg(unsigned char * rgb, int startRGB, float ** filter, int filterSize, float weights) {
+	int maskWidth  = filterSize,
+		maskHeight = filterSize;
 	// Calculate the sum of color.
 	int colorSum = 0;
 	for (int i = 0; i < maskHeight; i++) {
@@ -550,14 +543,16 @@ int Application::getBoxFilterAvg(unsigned char * rgb, int startRGB, float filter
 void Application::Filter_Box() {
 	unsigned char * rgb = this->To_RGB();
 
-	// Assign the filter matrix.
-	float filter[5][5] = {
-		{ 1, 1, 1, 1, 1 },
-		{ 1, 1, 1, 1, 1 },
-		{ 1, 1, 1, 1, 1 },
-		{ 1, 1, 1, 1, 1 },
-		{ 1, 1, 1, 1, 1 }
+	// Set the filter data for building filter.
+	int maskWidth = 5, maskHeight = 5;
+	float filterData[25] = {
+		1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1
 	};
+	float ** filter = this->create2dFilter(maskHeight, maskWidth, filterData);
 
 	// Convert to new color using average of filtering.
 	for (int i = 0; i < imgHeight; i++) {
@@ -566,9 +561,9 @@ void Application::Filter_Box() {
 			int oRGBA = i * imgWidth * 4 + j * 4;
 			// Calculate start index to filtering.
 			int startIndex = oRGB - 2 * imgWidth * 3 - 2 * 3;
-			imgData[oRGBA + RR] = this->getBoxFilterAvg(rgb, startIndex + RR, filter, 25);
-			imgData[oRGBA + GG] = this->getBoxFilterAvg(rgb, startIndex + GG, filter, 25);
-			imgData[oRGBA + BB] = this->getBoxFilterAvg(rgb, startIndex + BB, filter, 25);
+			// pColor is RR, GG and BB.
+			for (int pColor = 0; pColor < 3; pColor++)
+				imgData[oRGBA + pColor] = this->getBoxFilterAvg(rgb, startIndex + pColor, filter, 5, 25);
 			imgData[oRGBA + AA] = WHITE;
 		}
 	}
@@ -588,14 +583,16 @@ void Application::Filter_Box() {
 void Application::Filter_Bartlett() {
 	unsigned char * rgb = this->To_RGB();
 
-	// Assign the filter matrix.
-	float filter[5][5] = {
-		{ 1, 2, 3, 2, 1 },
-		{ 2, 4, 6, 4, 2 },
-		{ 3, 6, 9, 6, 3 },
-		{ 2, 4, 6, 4, 2 },
-		{ 1, 2, 3, 2, 1 }
+	// Set the filter data for building filter.
+	int maskWidth = 5, maskHeight = 5;
+	float filterData[25] = {
+		1, 2, 3, 2, 1,
+		2, 4, 6, 4, 2,
+		3, 6, 9, 6, 3,
+		2, 4, 6, 4, 2,
+		1, 2, 3, 2, 1
 	};
+	float ** filter = this->create2dFilter(maskHeight, maskWidth, filterData);
 
 	// Convert to new color using average of filtering.
 	for (int i = 0; i < imgHeight; i++) {
@@ -604,9 +601,9 @@ void Application::Filter_Bartlett() {
 			int oRGBA = i * imgWidth * 4 + j * 4;
 			// Calculate start index to filtering.
 			int startIndex = oRGB - 2 * imgWidth * 3 - 2 * 3;
-			imgData[oRGBA + RR] = this->getBoxFilterAvg(rgb, startIndex + RR, filter, 81);
-			imgData[oRGBA + GG] = this->getBoxFilterAvg(rgb, startIndex + GG, filter, 81);
-			imgData[oRGBA + BB] = this->getBoxFilterAvg(rgb, startIndex + BB, filter, 81);
+			// pColor is RR, GG and BB.
+			for (int pColor = 0; pColor < 3; pColor++)
+				imgData[oRGBA + pColor] = this->getBoxFilterAvg(rgb, startIndex + pColor, filter, 5, 81);
 			imgData[oRGBA + AA] = WHITE;
 		}
 	}
@@ -626,14 +623,16 @@ void Application::Filter_Bartlett() {
 void Application::Filter_Gaussian() {
 	unsigned char * rgb = this->To_RGB();
 
-	// Assign the filter matrix.
-	float filter[5][5] = {
-		{ 1,  4,  6,  4, 1 },
-		{ 4, 16, 24, 16, 4 },
-		{ 6, 24, 36, 24, 6 },
-		{ 4, 16, 24, 16, 4 },
-		{ 1,  4,  6,  4, 1 }
+	// Set the filter data for building filter.
+	int maskWidth = 5, maskHeight = 5;
+	float filterData[25] = {
+		1,  4,  6,  4, 1,
+		4, 16, 24, 16, 4,
+		6, 24, 36, 24, 6,
+		4, 16, 24, 16, 4,
+		1,  4,  6,  4, 1
 	};
+	float ** filter = this->create2dFilter(maskHeight, maskWidth, filterData);
 
 	// Convert to new color using average of filtering.
 	for (int i = 0; i < imgHeight; i++) {
@@ -642,13 +641,13 @@ void Application::Filter_Gaussian() {
 			int oRGBA = i * imgWidth * 4 + j * 4;
 			// Calculate start index to filtering.
 			int startIndex = oRGB - 2 * imgWidth * 3 - 2 * 3;
-			imgData[oRGBA + RR] = this->getBoxFilterAvg(rgb, startIndex + RR, filter, 256);
-			imgData[oRGBA + GG] = this->getBoxFilterAvg(rgb, startIndex + GG, filter, 256);
-			imgData[oRGBA + BB] = this->getBoxFilterAvg(rgb, startIndex + BB, filter, 256);
+			// pColor is RR, GG and BB.
+			for (int pColor = 0; pColor < 3; pColor++)
+				imgData[oRGBA + pColor] = this->getBoxFilterAvg(rgb, startIndex + pColor, filter, 5, 256);
 			imgData[oRGBA + AA] = WHITE;
 		}
 	}
-	
+
 	delete[] rgb;
 	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
@@ -661,8 +660,62 @@ void Application::Filter_Gaussian() {
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-void Application::Filter_Gaussian_N(unsigned int N) {
+vector<float> Application::getBinomialFilter(int n) {
+	// Set the filter data for building filter.
+	vector<float> filterData;
+	// Binomial coefficient.
+	int biCoef[n];
+    for (int i = 0; i < n ; i++) {
+    	// If this row not enough column for size, skip it.
+        if (i + 1 < n)
+            continue;
+        // Calculate the coefficients.
+        for (int j = 0, coef = 1; j <= i; j++) {
+            coef = (! j || ! i) ? 1 : (coef * (i - j + 1) / j);
+            biCoef[j] = coef;
+        }
+    }
+    // Generate the filter array.
+    for (int i = 0; i < n ; i++) {
+        for (int j = 0; j < n; j++) {
+            if (i == 0 || i == n - 1)
+                filterData.push_back(biCoef[j]);
+            else if (j == 0 || j == n - 1)
+                filterData.push_back(biCoef[i]);
+            else
+                filterData.push_back(biCoef[i] * biCoef[j]);
+        }
+    }
+	return filterData;
+}
 
+void Application::Filter_Gaussian_N(unsigned int n) {
+	unsigned char * rgb = this->To_RGB();
+
+	// Set the filter data for building filter.
+	float ** filter = this->create2dFilter(n, n, this->getBinomialFilter(n));
+	float weights = 0;
+	for (int i = 0; i < n; i++)
+		for (int j = 0; j < n; j++)
+			weights += filter[i][j];
+
+	// Convert to new color using average of filtering.
+	for (int i = 0; i < imgHeight; i++) {
+		for (int j = 0; j < imgWidth; j++) {
+			int oRGB  = i * imgWidth * 3 + j * 3;
+			int oRGBA = i * imgWidth * 4 + j * 4;
+			// Calculate start index to filtering.
+			int startIndex = oRGB - 2 * imgWidth * 3 - 2 * 3;
+			// pColor is RR, GG and BB.
+			for (int pColor = 0; pColor < 3; pColor++)
+				imgData[oRGBA + pColor] = this->getBoxFilterAvg(rgb, startIndex + pColor, filter, n, weights);
+			imgData[oRGBA + AA] = WHITE;
+		}
+	}
+
+	delete[] rgb;
+	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	renew();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -675,14 +728,16 @@ void Application::Filter_Gaussian_N(unsigned int N) {
 void Application::Filter_Edge() {
 	unsigned char * rgb = this->To_RGB();
 
-	// Assign the filter matrix.
-	float filter[5][5] = {
-		{ -1,  -4,  -6,  -4, -1 },
-		{ -4, -16, -24, -16, -4 },
-		{ -6, -24, 220, -24, -6 },
-		{ -4, -16, -24, -16, -4 },
-		{ -1,  -4,  -6,  -4, -1 }
+	// Set the filter data for building filter.
+	int maskWidth = 5, maskHeight = 5;
+	float filterData[25] = {
+		-1,  -4,  -6,  -4, -1,
+		-4, -16, -24, -16, -4,
+		-6, -24, 220, -24, -6,
+		-4, -16, -24, -16, -4,
+		-1,  -4,  -6,  -4, -1
 	};
+	float ** filter = this->create2dFilter(maskHeight, maskWidth, filterData);
 
 	// Convert to new color using average of filtering.
 	for (int i = 0; i < imgHeight; i++) {
@@ -691,9 +746,9 @@ void Application::Filter_Edge() {
 			int oRGBA = i * imgWidth * 4 + j * 4;
 			// Calculate start index to filtering.
 			int startIndex = oRGB - 2 * imgWidth * 3 - 2 * 3;
-			imgData[oRGBA + RR] = this->getBoxFilterAvg(rgb, startIndex + RR, filter, 256);
-			imgData[oRGBA + GG] = this->getBoxFilterAvg(rgb, startIndex + GG, filter, 256);
-			imgData[oRGBA + BB] = this->getBoxFilterAvg(rgb, startIndex + BB, filter, 256);
+			// pColor is RR, GG and BB.
+			for (int pColor = 0; pColor < 3; pColor++)
+				imgData[oRGBA + pColor] = this->getBoxFilterAvg(rgb, startIndex + pColor, filter, 5, 256);
 			imgData[oRGBA + AA] = WHITE;
 		}
 	}

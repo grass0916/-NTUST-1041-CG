@@ -1,5 +1,8 @@
 #pragma once
 #include "OpenglWidget.h"
+#include <vector>
+
+using namespace std;
 
 class Stroke { // Data structure for holding painterly strokes.
 public:
@@ -11,11 +14,6 @@ public:
 	unsigned int radius, x, y;	// Location for the stroke
 	unsigned char r, g, b, a;	// Color
 };
-
-typedef struct {
-	// Reg, Green, blue and alpha.
-	int r, g, b, a;
-} Color;
 
 class Application : public OpenglWidget {
 public:
@@ -45,13 +43,14 @@ public:
 	void Dither_Color();
 
 	// Filter
-	int getBoxFilterAvg(unsigned char * rgb, int startRGB, float filter[][5], float weights); // Added.
-	void filtering(double filter[][5]);
-	void filtering(double **filter, int n);
+	float ** create2dFilter(int sx, int sy, float filterData[]); // Added.
+	float ** create2dFilter(int sx, int sy, vector<float> filterData); // Added.
+	int getBoxFilterAvg(unsigned char * rgb, int startRGB, float ** filter, int filterSize, float weights); // Added.
 	void Filter_Box();
 	void Filter_Bartlett();
 	void Filter_Gaussian();
-	void Filter_Gaussian_N(unsigned int N);
+	vector<float> getBinomialFilter(int n); // Added.
+	void Filter_Gaussian_N(unsigned int n);
 	void Filter_Edge();
 	void Filter_Enhance();
 
