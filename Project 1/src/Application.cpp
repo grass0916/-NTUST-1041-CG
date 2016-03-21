@@ -1,7 +1,11 @@
 #include "Application.h"
 #include "qt_opengl_framework.h"
 #include <map>
+#include <cmath>
+#include <string>
+#include <iomanip>
 #include <sstream>
+#include <cstring>
 #include <algorithm>
 
 using namespace std;
@@ -55,9 +59,9 @@ void Application::renew() {
 	ui_instance = Qt_Opengl_Framework::getInstance();
 
 	ui_instance->ui.label->clear();
-	ui_instance->ui.label->setPixmap(QPixmap::fromImage(mImageDst));
+	ui_instance->ui.label->setPixmap(QPixmap::fromImage(this->mImageDst));
 
-	std::cout << "Renew" << std::endl;
+	cout << "Refresh." << endl;
 }
 
 //****************************************************************************
@@ -198,36 +202,87 @@ void Application::Quant_Uniform() {
 ///////////////////////////////////////////////////////////////////////////////
 
 struct GreaterCounts {
-    bool operator () (pair<string, int> const & a, pair<string, int> const & b) const {
-        return a.second < b.second;
+    bool operator() (pair<string, int> const & a, pair<string, int> const & b) const {
+        return a.second > b.second;
     }
 };
+
+string Application::convertColorToString(int red, int green, int blue, int dimReduce) {
+	stringstream RGB;
+	RGB << setw(3) << setfill('0') << ((red   >> dimReduce) << dimReduce)
+		<< setw(3) << setfill('0') << ((green >> dimReduce) << dimReduce)
+		<< setw(3) << setfill('0') << ((blue  >> dimReduce) << dimReduce);
+	return RGB.str();
+}
 
 void Application::Quant_Populosity() {
 	unsigned char * rgb = this->To_RGB();
 
-	// // Store all color RGB to map container.
-	// map<string, int> rgbCount;
-	// map<string, int>::iterator it;
-	// for (int i = 0; i < imgHeight; i += 3) {
-	// 	for (int j = 0; j < imgWidth; j += 3) {
-	// 		int oRGB = i * imgWidth * 3 + j * 3;
-	// 		// Generate the RBG string (R:255, G:85, B: 0 is string '255850').
-	// 		stringstream RGB;
-	// 		RGB << rgb[oRGB + RR] << rgb[oRGB + GG] << rgb[oRGB + BB];
-	// 		// Add the count of color in map container.
-	// 		it = rgbCount.find(RGB.str());
-	// 		if (it != rgbCount.end())
-	// 			rgbCount.insert(pair<string, int> (RGB.str(), 1));
-	// 		else
-	// 			it->second += 1;
-	// 	}
-	// }
-	// // Sort, filtering top 256.
-	// vector<pair<string, int> > rgbCountClone(rgbCount.begin(), rgbCount.end());
-	// sort(rgbCountClone.begin(), rgbCountClone.end(), GreaterCounts());
-	// it = rgbCount.find('e');
-	// rgbCount.erase(it, rgbCount.end());
+	// [Map] Create color table. Store all color RGB to map container.
+	map<string, int> colorTable;
+	map<string, int>::iterator it;
+	for (int i = 0; i < imgHeight; i++) {
+		for (int j = 0; j < imgWidth; j++) {
+			int oRGB  = i * imgWidth * 3 + j * 3;
+			int oRGBA = i * imgWidth * 4 + j * 4;
+			// Generate the RBG and divide 8 to gray. (#FF00FF is 255000255)
+			string RGB = this->convertColorToString((int) rgb[oRGB + RR], (int) rgb[oRGB + GG], (int) rgb[oRGB + BB], 3);
+			// Add the count of color in map container.
+			it = colorTable.find(RGB);
+			if (it == colorTable.end())
+				colorTable.insert(pair<string, int> (RGB, 1));
+			else
+				it->second += 1;
+		}
+	}
+	// [Vector] Sort by counts decreasing using vector container.
+	vector<pair<string, int> > v_colorTable(colorTable.begin(), colorTable.end());
+	sort(v_colorTable.begin(), v_colorTable.end(), GreaterCounts());
+	// [Vector] Filter top 256.
+	if (v_colorTable.size() > 256)
+		v_colorTable.erase(v_colorTable.begin() + 256, v_colorTable.end());
+	// [Map] Clean color table. Convert vector to map container.
+	colorTable.erase(colorTable.begin(), colorTable.end());
+	for (vector<pair<string, int> >::iterator it = v_colorTable.begin(); it != v_colorTable.end(); it++)
+		colorTable.insert(pair<string, int> (it->first, it->second));
+	// Assign the new color via color table with euclidean distance.
+	for (int i = 0; i < imgHeight; i++) {
+		for (int j = 0; j < imgWidth; j++) {
+			int oRGB  = i * imgWidth * 3 + j * 3;
+			int oRGBA = i * imgWidth * 4 + j * 4;
+			// Get the current RGB of pixel.
+			string RGB = this->convertColorToString((int) rgb[oRGB + RR], (int) rgb[oRGB + GG], (int) rgb[oRGB + BB], 3);
+			it = colorTable.find(RGB);
+			// This color is in color table.
+			if (it != colorTable.end()) {
+				imgData[oRGBA + RR] = atoi(it->first.substr(0, 3).c_str());
+				imgData[oRGBA + GG] = atoi(it->first.substr(3, 3).c_str());
+				imgData[oRGBA + BB] = atoi(it->first.substr(6, 3).c_str());
+				imgData[oRGBA + AA] = WHITE;
+				continue;
+			}
+			// This color isn't in color table, need to find closest color with euclidean distance.
+			int closestR, closestG, closestB;
+			double closestDistance = sqrt(3 * pow(256.0, 2));
+			int r1 = (int) rgb[oRGB + RR], g1 = (int) rgb[oRGB + GG], b1 = (int) rgb[oRGB + BB];
+			for (it = colorTable.begin(); it != colorTable.end(); it++) {
+				int r2 = atoi(it->first.substr(0, 3).c_str()),
+					g2 = atoi(it->first.substr(3, 3).c_str()),
+					b2 = atoi(it->first.substr(6, 3).c_str());
+				double distance = sqrt(pow(((double) r1 - r2), 2) + pow(((double) g1 - g2), 2) + pow(((double) b1 - b2), 2));
+				if (distance < closestDistance) {
+					closestR = r2;
+					closestG = g2;
+					closestB = b2;
+					closestDistance = distance;
+				}
+			}
+			imgData[oRGBA + RR] = closestR;
+			imgData[oRGBA + GG] = closestG;
+			imgData[oRGBA + BB] = closestB;
+			imgData[oRGBA + AA] = WHITE;
+		}
+	}
 
 	delete[] rgb;
 	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
@@ -318,9 +373,9 @@ void Application::Dither_Random() {
 		for (int j = 0; j < imgWidth; j++) {
 			int oRGB  = i * imgWidth * 3 + j * 3;
 			int oRGBA = i * imgWidth * 4 + j * 4;
-			float gray = 0.3 * rgb[oRGB + RR] + 0.59 * rgb[oRGB + GG] + 0.11 * rgb[oRGB + BB];
+			double gray = 0.3 * rgb[oRGB + RR] + 0.59 * rgb[oRGB + GG] + 0.11 * rgb[oRGB + BB];
 			// Random intensity is [-0.2, 0.2].
-			float intensity = gray / 256 + (-0.2 + (((float) rand()) / (float) RAND_MAX) * 0.4);
+			double intensity = gray / 256 + (-0.2 + (((double) rand()) / (double) RAND_MAX) * 0.4);
 			// Threshold is 0.5 intensity.
 			imgData[oRGBA + RR] = imgData[oRGBA + GG] = imgData[oRGBA + BB] = intensity > 0.5 ? WHITE : BLACK;
 			imgData[oRGBA + AA] = WHITE;
@@ -834,6 +889,26 @@ void Application::Half_Size() {
 void Application::Double_Size() {
 	unsigned char * rgb = To_RGB();
 
+	int newImgHeight = 2 * imgHeight,
+		newImgWidth  = 2 * imgWidth;
+
+	for (int i = 0; i < imgHeight; i++) {
+		cout << "i: " << i;
+		for (int j = 0; j < imgWidth; j++) {
+			int oRGB  = i * imgWidth * 3 + j * 3;
+			int oRGBA = i * imgWidth * 4 + j * 4;
+			// .
+			imgData[oRGBA + RR] = rgb[oRGB + RR];
+			imgData[oRGBA + GG] = rgb[oRGB + GG];
+			imgData[oRGBA + BB] = rgb[oRGB + BB];
+			imgData[oRGBA + AA] = WHITE;
+
+			cout << ",  \tR:" << (int) rgb[oRGB + RR] << "\tG:" << (int) rgb[oRGB + GG] << "\tB:" << (int) rgb[oRGB + BB];
+		}
+		cout << endl;
+	}
+
+/*	
 	for (int i = 0; i < imgHeight; i++) {
 		for (int j = 0; j < imgWidth; j++) {
 			int oRGB   = i * imgWidth * 3 + j * 3;
@@ -848,9 +923,10 @@ void Application::Double_Size() {
 			imgData[oRGBA1 + AA] = imgData[oRGBA2 + AA] = imgData[oRGBA3 + AA] = imgData[oRGBA4 + AA] = WHITE;
 		}
 	}
-	
+*/
+
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	mImageDst = QImage(imgData, newImgWidth, newImgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -872,6 +948,24 @@ void Application::resample_src(int u, int v, float ww, unsigned char * rgba) {
 ///////////////////////////////////////////////////////////////////////////////
 
 void Application::Resize(float scale) {
+	unsigned char * rgb = To_RGB();
+
+	int newImgHeight = scale * imgHeight,
+		newImgWidth  = scale * imgWidth;
+
+	for (int x = 0; x < newImgHeight; x++) {
+		for (int y = 0; y < newImgWidth; y++) {
+			int oRGB  = (2 * x) * imgWidth * 3 + (2 * y) * 3;
+			int oRGBA = x * imgWidth * 4 + y * 4;
+			// .
+			imgData[oRGBA + RR] = rgb[oRGB];
+			imgData[oRGBA + GG] = rgb[oRGB];
+			imgData[oRGBA + BB] = rgb[oRGB];
+			imgData[oRGBA + AA] = WHITE;
+		}
+	}
+	
+	delete[] rgb;
 	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }

@@ -31,6 +31,7 @@ public:
 	// Color
 	void Gray();
 	void Quant_Uniform();
+	string convertColorToString(int red, int green, int blue, int dimReduce); // Added.
 	void Quant_Populosity();
 
 	// Dithering
