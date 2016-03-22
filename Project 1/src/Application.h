@@ -58,9 +58,9 @@ public:
 	// Size
 	void Half_Size();
 	void Double_Size();
+	double BilinearInterpolation(int q11, int q12, int q21, int q22, int x1, int x2, int y1, int y2, double x, double y);
 	void Resize(float scale);
     void Rotate(float angleDegrees);
-	void resample_src(int u, int v, float ww, unsigned char* rgba);
 
 	// Composing
 	enum _CompImage { _over, _in, _out, _atop, _xor };

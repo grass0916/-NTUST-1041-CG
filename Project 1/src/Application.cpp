@@ -61,6 +61,9 @@ void Application::renew() {
 	ui_instance->ui.label->clear();
 	ui_instance->ui.label->setPixmap(QPixmap::fromImage(this->mImageDst));
 
+	ui_instance->ui.label->setFixedHeight(imgHeight);
+	ui_instance->ui.label->setFixedWidth(imgWidth);
+
 	cout << "Refresh." << endl;
 }
 
@@ -163,7 +166,7 @@ void Application::Gray() {
 	}
 	
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -190,7 +193,7 @@ void Application::Quant_Uniform() {
 	}
 
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -285,7 +288,7 @@ void Application::Quant_Populosity() {
 	}
 
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -314,7 +317,7 @@ void Application::Dither_Threshold() {
 	}
 	
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -353,7 +356,7 @@ void Application::Dither_Bright() {
 	}
 
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -383,7 +386,7 @@ void Application::Dither_Random() {
 	}
 
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -420,7 +423,7 @@ void Application::Dither_Cluster() {
 	}
 
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -471,7 +474,7 @@ void Application::Dither_FS() {
 	}
 
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -537,7 +540,7 @@ void Application::Dither_Color() {
 	this->Quant_Uniform();
 
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -624,7 +627,7 @@ void Application::Filter_Box() {
 	}
 	
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -664,7 +667,7 @@ void Application::Filter_Bartlett() {
 	}
 	
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -676,36 +679,7 @@ void Application::Filter_Bartlett() {
 ///////////////////////////////////////////////////////////////////////////////
 
 void Application::Filter_Gaussian() {
-	unsigned char * rgb = this->To_RGB();
-
-	// Set the filter data for building filter.
-	int maskWidth = 5, maskHeight = 5;
-	float filterData[25] = {
-		1,  4,  6,  4, 1,
-		4, 16, 24, 16, 4,
-		6, 24, 36, 24, 6,
-		4, 16, 24, 16, 4,
-		1,  4,  6,  4, 1
-	};
-	float ** filter = this->create2dFilter(maskHeight, maskWidth, filterData);
-
-	// Convert to new color using average of filtering.
-	for (int i = 0; i < imgHeight; i++) {
-		for (int j = 0; j < imgWidth; j++) {
-			int oRGB  = i * imgWidth * 3 + j * 3;
-			int oRGBA = i * imgWidth * 4 + j * 4;
-			// Calculate start index to filtering.
-			int startIndex = oRGB - 2 * imgWidth * 3 - 2 * 3;
-			// pColor is RR, GG and BB.
-			for (int pColor = 0; pColor < 3; pColor++)
-				imgData[oRGBA + pColor] = this->getBoxFilterAvg(rgb, startIndex + pColor, filter, 5, 256);
-			imgData[oRGBA + AA] = WHITE;
-		}
-	}
-
-	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
-	renew();
+	this->Filter_Gaussian_N(5);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -720,27 +694,27 @@ vector<float> Application::getBinomialFilter(int n) {
 	vector<float> filterData;
 	// Binomial coefficient.
 	int biCoef[n];
-    for (int i = 0; i < n ; i++) {
-    	// If this row not enough column for size, skip it.
-        if (i + 1 < n)
-            continue;
-        // Calculate the coefficients.
-        for (int j = 0, coef = 1; j <= i; j++) {
-            coef = (! j || ! i) ? 1 : (coef * (i - j + 1) / j);
-            biCoef[j] = coef;
-        }
-    }
-    // Generate the filter array.
-    for (int i = 0; i < n ; i++) {
-        for (int j = 0; j < n; j++) {
-            if (i == 0 || i == n - 1)
-                filterData.push_back(biCoef[j]);
-            else if (j == 0 || j == n - 1)
-                filterData.push_back(biCoef[i]);
-            else
-                filterData.push_back(biCoef[i] * biCoef[j]);
-        }
-    }
+	for (int i = 0; i < n ; i++) {
+		// If this row not enough column for size, skip it.
+		if (i + 1 < n)
+			continue;
+		// Calculate the coefficients.
+		for (int j = 0, coef = 1; j <= i; j++) {
+			coef = (! j || ! i) ? 1 : (coef * (i - j + 1) / j);
+			biCoef[j] = coef;
+		}
+	}
+	// Generate the filter array.
+	for (int i = 0; i < n ; i++) {
+		for (int j = 0; j < n; j++) {
+			if (i == 0 || i == n - 1)
+				filterData.push_back(biCoef[j]);
+			else if (j == 0 || j == n - 1)
+				filterData.push_back(biCoef[i]);
+			else
+				filterData.push_back(biCoef[i] * biCoef[j]);
+		}
+	}
 	return filterData;
 }
 
@@ -760,7 +734,7 @@ void Application::Filter_Gaussian_N(unsigned int n) {
 			int oRGB  = i * imgWidth * 3 + j * 3;
 			int oRGBA = i * imgWidth * 4 + j * 4;
 			// Calculate start index to filtering.
-			int startIndex = oRGB - 2 * imgWidth * 3 - 2 * 3;
+			int startIndex = oRGB - ((int) (n / 2)) * imgWidth * 3 - ((int) (n / 2)) * 3;
 			// pColor is RR, GG and BB.
 			for (int pColor = 0; pColor < 3; pColor++)
 				imgData[oRGBA + pColor] = this->getBoxFilterAvg(rgb, startIndex + pColor, filter, n, weights);
@@ -769,7 +743,7 @@ void Application::Filter_Gaussian_N(unsigned int n) {
 	}
 
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -809,7 +783,7 @@ void Application::Filter_Edge() {
 	}
 	
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -832,7 +806,7 @@ void Application::Filter_Edge_Detection() {
 	}
 
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -846,9 +820,8 @@ void Application::Filter_Edge_Detection() {
 void Application::Filter_Enhance() {
 	unsigned char * rgb = this->To_RGB();
 
-
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -861,23 +834,7 @@ void Application::Filter_Enhance() {
 ///////////////////////////////////////////////////////////////////////////////
 
 void Application::Half_Size() {
-	unsigned char * rgb = To_RGB();
-
-	for (int i = 0; i < imgHeight; i++) {
-		for (int j = 0; j < imgWidth; j++) {
-			int oRGB  = (2 * i) * imgWidth * 3 + (2 * j) * 3;
-			int oRGBA = i * imgWidth * 4 + j * 4;
-			// .
-			imgData[oRGBA + RR] = (i < imgHeight / 2 && j < imgWidth / 2) ? rgb[oRGB + RR] : WHITE;
-			imgData[oRGBA + GG] = (i < imgHeight / 2 && j < imgWidth / 2) ? rgb[oRGB + GG] : WHITE;
-			imgData[oRGBA + BB] = (i < imgHeight / 2 && j < imgWidth / 2) ? rgb[oRGB + BB] : WHITE;
-			imgData[oRGBA + AA] = WHITE;
-		}
-	}
-	
-	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
-	renew();
+	this->Resize(0.5);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -887,57 +844,7 @@ void Application::Half_Size() {
 ///////////////////////////////////////////////////////////////////////////////
 
 void Application::Double_Size() {
-	unsigned char * rgb = To_RGB();
-
-	int newImgHeight = 2 * imgHeight,
-		newImgWidth  = 2 * imgWidth;
-
-	for (int i = 0; i < imgHeight; i++) {
-		cout << "i: " << i;
-		for (int j = 0; j < imgWidth; j++) {
-			int oRGB  = i * imgWidth * 3 + j * 3;
-			int oRGBA = i * imgWidth * 4 + j * 4;
-			// .
-			imgData[oRGBA + RR] = rgb[oRGB + RR];
-			imgData[oRGBA + GG] = rgb[oRGB + GG];
-			imgData[oRGBA + BB] = rgb[oRGB + BB];
-			imgData[oRGBA + AA] = WHITE;
-
-			cout << ",  \tR:" << (int) rgb[oRGB + RR] << "\tG:" << (int) rgb[oRGB + GG] << "\tB:" << (int) rgb[oRGB + BB];
-		}
-		cout << endl;
-	}
-
-/*	
-	for (int i = 0; i < imgHeight; i++) {
-		for (int j = 0; j < imgWidth; j++) {
-			int oRGB   = i * imgWidth * 3 + j * 3;
-			int oRGBA1 = (2 * i)     * imgWidth * 4 + (2 * j)     * 4;
-			int oRGBA2 = (2 * i)     * imgWidth * 4 + (2 * j + 1) * 4;
-			int oRGBA3 = (2 * i + 1) * imgWidth * 4 + (2 * j)     * 4;
-			int oRGBA4 = (2 * i + 1) * imgWidth * 4 + (2 * j + 1) * 4;
-			// .
-			imgData[oRGBA1 + RR] = imgData[oRGBA2 + RR] = imgData[oRGBA3 + RR] = imgData[oRGBA4 + RR] = rgb[oRGB + RR];
-			imgData[oRGBA1 + GG] = imgData[oRGBA2 + GG] = imgData[oRGBA3 + GG] = imgData[oRGBA4 + GG] = rgb[oRGB + GG];
-			imgData[oRGBA1 + BB] = imgData[oRGBA2 + BB] = imgData[oRGBA3 + BB] = imgData[oRGBA4 + BB] = rgb[oRGB + BB];
-			imgData[oRGBA1 + AA] = imgData[oRGBA2 + AA] = imgData[oRGBA3 + AA] = imgData[oRGBA4 + AA] = WHITE;
-		}
-	}
-*/
-
-	delete[] rgb;
-	mImageDst = QImage(imgData, newImgWidth, newImgHeight, QImage::Format_ARGB32);
-	renew();
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//
-//  resample_src for resize and rotate
-//
-///////////////////////////////////////////////////////////////////////////////
-
-void Application::resample_src(int u, int v, float ww, unsigned char * rgba) {
-
+	this->Resize(2.0);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -947,26 +854,51 @@ void Application::resample_src(int u, int v, float ww, unsigned char * rgba) {
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+double Application::BilinearInterpolation(int q11, int q12, int q21, int q22, int x1, int x2, int y1, int y2, double x, double y) {
+	double x2x1 = (double) x2 - x1,
+		   y2y1 = (double) y2 - y1,
+		   x2x  = (double) x2 - x,
+		   y2y  = (double) y2 - y,
+		   yy1  = (double) y - y1,
+		   xx1  = (double) x - x1;
+	return (double) 1.0 / (x2x1 * y2y1) * (q11 * x2x * y2y + q21 * xx1 * y2y + q12 * x2x * yy1 + q22 * xx1 * yy1);
+}
+
 void Application::Resize(float scale) {
 	unsigned char * rgb = To_RGB();
 
 	int newImgHeight = scale * imgHeight,
 		newImgWidth  = scale * imgWidth;
 
-	for (int x = 0; x < newImgHeight; x++) {
-		for (int y = 0; y < newImgWidth; y++) {
-			int oRGB  = (2 * x) * imgWidth * 3 + (2 * y) * 3;
-			int oRGBA = x * imgWidth * 4 + y * 4;
-			// .
-			imgData[oRGBA + RR] = rgb[oRGB];
-			imgData[oRGBA + GG] = rgb[oRGB];
-			imgData[oRGBA + BB] = rgb[oRGB];
+	// Expand the image data size.
+	imgData = new unsigned char[newImgWidth * 2 * imgHeight * 2 * 4];
+
+	for (int i = 0; i < newImgHeight; i++) {
+		for (int j = 0; j < newImgWidth; j++) {
+			double x = (double) imgHeight / newImgHeight * i,
+				   y = (double) imgWidth  / newImgWidth  * j;
+			int x1 = floor(x),
+				x2 = (x1 >= imgHeight) ? x1 : (x1 + 1),
+				y1 = floor(y),
+				y2 = (y1 >= imgWidth) ? y1 : (y1 + 1);
+			int oq11 = x1 * imgWidth * 3 + y1 * 3,
+				oq12 = x1 * imgWidth * 3 + y2 * 3,
+				oq21 = x2 * imgWidth * 3 + y1 * 3,
+				oq22 = x2 * imgWidth * 3 + y2 * 3;
+			int oRGBA = i * newImgWidth * 4 + j * 4;
+			// Bilinear interpolation.
+			imgData[oRGBA + RR] = (int) this->BilinearInterpolation(rgb[oq11 + RR], rgb[oq12 + RR], rgb[oq21 + RR], rgb[oq22 + RR], x1, x2, y1, y2, x, y);
+			imgData[oRGBA + GG] = (int) this->BilinearInterpolation(rgb[oq11 + GG], rgb[oq12 + GG], rgb[oq21 + GG], rgb[oq22 + GG], x1, x2, y1, y2, x, y);
+			imgData[oRGBA + BB] = (int) this->BilinearInterpolation(rgb[oq11 + BB], rgb[oq12 + BB], rgb[oq21 + BB], rgb[oq22 + BB], x1, x2, y1, y2, x, y);
 			imgData[oRGBA + AA] = WHITE;
 		}
 	}
 	
 	delete[] rgb;
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, newImgWidth, newImgHeight, QImage::Format_ARGB32);
+	// Refresh the size.
+	this->imgHeight = newImgHeight;
+	this->imgWidth  = newImgWidth;
 	renew();
 }
 
@@ -978,7 +910,49 @@ void Application::Resize(float scale) {
 ///////////////////////////////////////////////////////////////////////////////
 
 void Application::Rotate(float angleDegrees) {
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	unsigned char * rgb = To_RGB();
+
+	// Sin, Cos, mathematics function using radian.
+	float radian = - (angleDegrees * M_PI / 180);
+
+	int offsetHeight = 1 * ceil(abs(sin(radian) * imgWidth)),
+		offsetWidth  = 1 * ceil(abs(sin(radian) * imgHeight));
+	int newImgHeight = imgHeight + offsetHeight * 2,
+		newImgWidth  = imgWidth  + offsetWidth * 2;
+
+	// Expand the image data size.
+	imgData = new unsigned char[newImgWidth * 2 * imgHeight * 2 * 4];
+
+	for (int i = 0; i < newImgHeight; i++) {
+		for (int j = 0; j < newImgWidth; j++) {
+			int oRGBA = i * newImgWidth * 4 + j * 4;
+			double u = (double) i * cos(radian) - (double) j * sin(radian),
+				   v = (double) i * sin(radian) + (double) j * cos(radian);
+			if (u >= 0 && v >= 0 && u < imgHeight && v < imgWidth) {
+				int u1 = abs(floor(u)),
+					u2 = (u1 >= imgHeight) ? u1 : (u1 + 1),
+					v1 = abs(floor(v)),
+					v2 = (v1 >= imgWidth) ? v1 : (v1 + 1);
+				int oq11 = u1 * imgWidth * 3 + v1 * 3,
+					oq12 = u1 * imgWidth * 3 + v2 * 3,
+					oq21 = u2 * imgWidth * 3 + v1 * 3,
+					oq22 = u2 * imgWidth * 3 + v2 * 3;
+				// Bilinear interpolation.
+				imgData[oRGBA + RR] = (int) this->BilinearInterpolation(rgb[oq11 + RR], rgb[oq12 + RR], rgb[oq21 + RR], rgb[oq22 + RR], u1, u2, v1, v2, u, v);
+				imgData[oRGBA + GG] = (int) this->BilinearInterpolation(rgb[oq11 + GG], rgb[oq12 + GG], rgb[oq21 + GG], rgb[oq22 + GG], u1, u2, v1, v2, u, v);
+				imgData[oRGBA + BB] = (int) this->BilinearInterpolation(rgb[oq11 + BB], rgb[oq12 + BB], rgb[oq21 + BB], rgb[oq22 + BB], u1, u2, v1, v2, u, v);
+				imgData[oRGBA + AA] = WHITE;
+			} else {
+				imgData[oRGBA + RR] = WHITE, imgData[oRGBA + GG] = WHITE, imgData[oRGBA + BB] = WHITE, imgData[oRGBA + AA] = BLACK;
+			}
+		}
+	}
+	
+	delete[] rgb;
+	this->mImageDst = QImage(imgData, newImgWidth, newImgHeight, QImage::Format_ARGB32);
+	// Refresh the size.
+	this->imgHeight = newImgHeight;
+	this->imgWidth  = newImgWidth;
 	renew();
 }
 
@@ -1003,7 +977,7 @@ void Application::loadSecondaryImge( QString filePath )
 //////////////////////////////////////////////////////////////////////////
 void Application::Comp_image( int tMethod )
 {
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
@@ -1109,7 +1083,7 @@ void Application::Comp_Xor()
 ///////////////////////////////////////////////////////////////////////////////
 void Application::NPR_Paint()
 {
-	mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
+	this->mImageDst = QImage(imgData, imgWidth, imgHeight, QImage::Format_ARGB32);
 	renew();
 }
 
