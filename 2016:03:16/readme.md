@@ -26,9 +26,13 @@
 
 ## 
 
-->![](img/.png =550x)<-
+## Blue screen（Chroma key）
 
--><-
+承接上一段落的 Composition，在現實生活中已廣泛利用在電視、電影圈，藉由不常見的高明亮綠色或是藍色將其過濾達到去背的效果。至於為何不選用紅色，主要是因為人體膚色由較多的紅色光所組成，若選用紅色恐會導致膚色的表現。
+
+->![Greenscreen Compare](img/GreenscreenCompare.png =275x)<-
+
+->電視藍幕去背<-
 
 
 ---
